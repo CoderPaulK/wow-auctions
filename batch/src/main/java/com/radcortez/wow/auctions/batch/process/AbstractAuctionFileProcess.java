@@ -1,13 +1,13 @@
 package com.radcortez.wow.auctions.batch.process;
 
-import com.radcortez.wow.auctions.business.WoWBusiness;
 import com.radcortez.wow.auctions.entity.AuctionFile;
+import com.radcortez.wow.auctions.entity.ConnectedRealm;
 import com.radcortez.wow.auctions.entity.FolderType;
-import com.radcortez.wow.auctions.entity.Realm;
+import lombok.RequiredArgsConstructor;
 
-import javax.annotation.PostConstruct;
-import javax.batch.runtime.context.JobContext;
-import javax.inject.Inject;
+import jakarta.annotation.PostConstruct;
+import jakarta.batch.runtime.context.JobContext;
+import jakarta.inject.Inject;
 import java.io.File;
 
 import static org.apache.commons.io.FileUtils.getFile;
@@ -17,60 +17,52 @@ import static org.apache.commons.io.FileUtils.getFile;
  */
 public abstract class AbstractAuctionFileProcess {
     @Inject
-    private JobContext jobContext;
-    @Inject
-    private WoWBusiness woWBusiness;
+    JobContext jobContext;
 
     @PostConstruct
-    private void init() {
-        Long realmId = Long.valueOf(jobContext.getProperties().getProperty("realmId"));
-        Long auctionFileId = Long.valueOf(jobContext.getProperties().getProperty("auctionFileId"));
+    void init() {
+        final String connectedRealmId = jobContext.getProperties().getProperty("connectedRealmId");
 
         if (jobContext.getTransientUserData() == null) {
-            jobContext.setTransientUserData(new AuctionFileProcessContext(realmId, auctionFileId));
+            jobContext.setTransientUserData(new AuctionFileProcessContext(connectedRealmId));
         }
     }
 
-    protected AuctionFileProcessContext getContext() {
+    public AuctionFileProcessContext getContext() {
         return (AuctionFileProcessContext) jobContext.getTransientUserData();
     }
 
-    public class AuctionFileProcessContext {
-        private Long realmId;
-        private Long auctionFileId;
+    @RequiredArgsConstructor
+    public static class AuctionFileProcessContext {
+        private final String connectedRealmId;
 
-        private Realm realm;
-        private AuctionFile fileToProcess;
+        private ConnectedRealm connectedRealm;
+        private AuctionFile auctionFile;
 
-        private AuctionFileProcessContext(Long realmId, Long auctionFileId) {
-            this.realmId = realmId;
-            this.auctionFileId = auctionFileId;
-        }
-
-        public Realm getRealm() {
-            if (realm == null) {
-                realm = woWBusiness.findRealmById(realmId);
+        public ConnectedRealm getConnectedRealm() {
+            if (connectedRealm == null) {
+                connectedRealm = ConnectedRealm.findById(connectedRealmId);
             }
-
-            return realm;
+            return connectedRealm;
         }
 
-        public AuctionFile getFileToProcess() {
-            if (fileToProcess == null) {
-                this.fileToProcess = woWBusiness.findAuctionFileById(auctionFileId);
+        public AuctionFile getAuctionFile() {
+            if (auctionFile == null) {
+                throw new IllegalStateException();
             }
-
-            return fileToProcess;
+            return auctionFile;
         }
 
-        public File getFileToProcess(FolderType folderType) {
-            return getFile(woWBusiness.findRealmFolderById(getRealm().getId(), folderType).getPath() +
-                           "/" +
-                           getFileToProcess().getFileName());
+        public void setAuctionFile(AuctionFile auctionFile) {
+            this.auctionFile = auctionFile;
+        }
+
+        public File getAuctionFile(FolderType folderType) {
+            return getFile(connectedRealm.getFolders().get(folderType).getPath() + "/" + getAuctionFile().getFileName());
         }
 
         public File getFolder(FolderType folderType) {
-            return getFile(woWBusiness.findRealmFolderById(getRealm().getId(), folderType).getPath());
+            return getFile(connectedRealm.getFolders().get(folderType).getPath());
         }
     }
 }

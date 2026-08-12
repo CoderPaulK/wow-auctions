@@ -1,26 +1,27 @@
 package com.radcortez.wow.auctions.batch.process.purge;
 
 import com.radcortez.wow.auctions.batch.process.AbstractAuctionFileProcess;
-import com.radcortez.wow.auctions.business.WoWBusiness;
 
-import javax.batch.api.Batchlet;
-import javax.inject.Inject;
-import javax.inject.Named;
+import jakarta.batch.api.Batchlet;
+import jakarta.batch.runtime.BatchStatus;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Named;
+import jakarta.transaction.Transactional;
 
 /**
  * @author Ivan St. Ivanov
  */
+@Dependent
 @Named
 public class PurgeRawAuctionDataBatchlet extends AbstractAuctionFileProcess implements Batchlet {
-    @Inject
-    private WoWBusiness woWBusiness;
-
     @Override
-    public String process() throws Exception {
-        woWBusiness.deleteAuctionDataByFile(getContext().getFileToProcess().getId());
-        return "COMPLETED";
+    @Transactional
+    public String process() {
+        getContext().getAuctionFile().delete();
+
+        return BatchStatus.COMPLETED.toString();
     }
 
     @Override
-    public void stop() throws Exception {}
+    public void stop() {}
 }

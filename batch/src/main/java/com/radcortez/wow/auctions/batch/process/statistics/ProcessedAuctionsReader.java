@@ -1,71 +1,75 @@
 package com.radcortez.wow.auctions.batch.process.statistics;
 
 import com.radcortez.wow.auctions.batch.process.AbstractAuctionFileProcess;
-import com.radcortez.wow.auctions.entity.AuctionHouse;
+import lombok.extern.java.Log;
 import org.apache.commons.dbutils.DbUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import javax.annotation.Resource;
-import javax.batch.api.BatchProperty;
-import javax.batch.api.chunk.ItemReader;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.sql.DataSource;
+import jakarta.batch.api.chunk.ItemReader;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import java.io.Serializable;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Optional;
 
 /**
  * @author Ivan St. Ivanov
  */
+@Dependent
 @Named
+@Log
 public class ProcessedAuctionsReader extends AbstractAuctionFileProcess implements ItemReader {
     @Inject
-    @BatchProperty(name = "auctionHouse")
-    String auctionHouse;
+    @ConfigProperty(name = "quarkus.datasource.jdbc.url")
+    String url;
+    @Inject
+    @ConfigProperty(name = "quarkus.datasource.username")
+    Optional<String> username;
+    @Inject
+    @ConfigProperty(name = "quarkus.datasource.password")
+    Optional<String> password;
 
-    @Resource(name = "java:comp/DefaultDataSource")
-    protected DataSource dataSource;
-
+    private Connection connection;
     private PreparedStatement preparedStatement;
     private ResultSet resultSet;
 
     @Override
     public void open(Serializable checkpoint) throws Exception {
-        Connection connection = dataSource.getConnection();
+        log.info("Processing Auctions Statistics for Realm " + getContext().getConnectedRealm().getId());
+        // This is a workaround because Agroal doesn't honor ResultSet.HOLD_CURSORS_OVER_COMMIT. See https://github.com/quarkusio/quarkus/issues/6770
+        connection = DriverManager.getConnection(url, username.orElse(null), password.orElse(null));
 
-        preparedStatement = connection.prepareStatement("SELECT" +
-                                                        "   itemid as itemId," +
-                                                        "   sum(quantity)," +
-                                                        "   sum(bid)," +
-                                                        "   sum(buyout)," +
-                                                        "   min(bid / quantity)," +
-                                                        "   min(buyout / quantity)," +
-                                                        "   max(bid / quantity)," +
-                                                        "   max(buyout / quantity)" +
-                                                        " FROM auction" +
-                                                        " WHERE auctionfile_id = " +
-                                                        getContext().getFileToProcess().getId() +
-                                                        " AND auctionhouse = " +
-                                                        AuctionHouse.valueOf(auctionHouse).ordinal() +
-                                                        " GROUP BY itemid, auctionhouse" +
-                                                        " ORDER BY 1",
-                                                        ResultSet.TYPE_FORWARD_ONLY,
-                                                        ResultSet.CONCUR_READ_ONLY,
-                                                        ResultSet.HOLD_CURSORS_OVER_COMMIT
-                                                       );
-
-        // Weird bug with Postgre here.
-        //preparedStatement.setLong(1, getContext().getFileToProcess().getId());
-        //preparedStatement.setInt(2, AuctionHouse.valueOf(auctionHouse).ordinal());
+        preparedStatement = this.connection.prepareStatement(
+            "SELECT" +
+            "   itemid as itemId," +
+            "   sum(quantity)," +
+            "   sum(bid)," +
+            "   sum(buyout)," +
+            "   min(bid / quantity)," +
+            "   min(buyout / quantity)," +
+            "   max(bid / quantity)," +
+            "   max(buyout / quantity)" +
+            " FROM auction" +
+            " WHERE auctionfile_id = " + getContext().getAuctionFile().getId() +
+            " GROUP BY itemid" +
+            " ORDER BY 1",
+                ResultSet.TYPE_FORWARD_ONLY,
+                ResultSet.CONCUR_READ_ONLY,
+                ResultSet.HOLD_CURSORS_OVER_COMMIT);
 
         resultSet = preparedStatement.executeQuery();
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         DbUtils.closeQuietly(resultSet);
         DbUtils.closeQuietly(preparedStatement);
+        DbUtils.closeQuietly(connection);
+        log.info("Finished Auctions Statistics for Realm " + getContext().getConnectedRealm().getId());
     }
 
     @Override
@@ -73,7 +77,8 @@ public class ProcessedAuctionsReader extends AbstractAuctionFileProcess implemen
         return resultSet.next() ? resultSet : null;
     }
 
-    @Override public Serializable checkpointInfo() throws Exception {
+    @Override
+    public Serializable checkpointInfo() {
         return null;
     }
 }

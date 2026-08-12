@@ -1,69 +1,60 @@
 package com.radcortez.wow.auctions.batch.prepare;
 
-import com.radcortez.wow.auctions.business.WoWBusiness;
-import com.radcortez.wow.auctions.configuration.Configuration;
+import com.radcortez.wow.auctions.entity.ConnectedRealm;
+import com.radcortez.wow.auctions.entity.Folder;
 import com.radcortez.wow.auctions.entity.FolderType;
-import com.radcortez.wow.auctions.entity.Realm;
-import com.radcortez.wow.auctions.entity.RealmFolder;
+import lombok.extern.java.Log;
 import org.apache.commons.io.FileUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import javax.batch.api.AbstractBatchlet;
-import javax.inject.Inject;
-import javax.inject.Named;
+import jakarta.batch.api.AbstractBatchlet;
+import jakarta.batch.runtime.BatchStatus;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.transaction.Transactional;
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Level;
-
-import static java.util.logging.Logger.getLogger;
 
 /**
  * @author Roberto Cortez
  */
+@Dependent
 @Named
+@Log
 public class FolderCreationBatchlet extends AbstractBatchlet {
     @Inject
-    private WoWBusiness woWBusiness;
-
-    @Inject
-    @Configuration
-    private String batchHome;
-    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
-    @Inject
-    @Configuration
-    private Map<String, List<FolderType>> folders;
+    @ConfigProperty(name = "wow.batch.home")
+    String batchHome;
 
     @Override
-    public String process() throws Exception {
-        getLogger(this.getClass().getName()).log(Level.INFO, this.getClass().getSimpleName() + " running");
+    @Transactional
+    public String process() {
+        log.info(FolderCreationBatchlet.class.getSimpleName() + " running");
 
-        woWBusiness.listRealms()
-                       .stream()
-                       .forEach(realm -> folders
-                               .forEach((folderRoot, folderTypes) -> folderTypes
-                                       .forEach(folderType ->
-                                                        verifyAndCreateFolder(folderRoot, realm, folderType))));
+        ConnectedRealm.<ConnectedRealm>listAll().forEach(this::verifyAndCreateFolder);
 
-
-        getLogger(this.getClass().getName()).log(Level.INFO, this.getClass().getSimpleName() + " completed");
-        return "COMPLETED";
+        log.info(FolderCreationBatchlet.class.getSimpleName() + " completed");
+        return BatchStatus.COMPLETED.toString();
     }
 
-    private void verifyAndCreateFolder(String folderRoot, Realm realm, FolderType folderType) {
-        File folder = new File(
-                batchHome + "/" + folderRoot + "/" + realm.getRegion() + "/" + realm.getName() + "/" + folderType);
-
-        if (!folder.exists()) {
-            try {
-                getLogger(this.getClass().getName()).log(Level.INFO, "Creating folder " + folder);
-                FileUtils.forceMkdir(folder);
-                woWBusiness.createRealmFolder(new RealmFolder(realm.getId(), folderType, folder.getPath()));
-            } catch (IOException e) {
-                e.printStackTrace();
+    private void verifyAndCreateFolder(final ConnectedRealm connectedRealm) {
+        for (FolderType folderType : FolderType.values()) {
+            File folder = FileUtils.getFile(batchHome, connectedRealm.getRegion().toString(), connectedRealm.getId(), folderType.toString());
+            if (!folder.exists()) {
+                try {
+                    log.info("Creating folder " + folder);
+                    FileUtils.forceMkdir(folder);
+                } catch (IOException e) {
+                    // Ignore
+                    continue;
+                }
             }
-        } else if (woWBusiness.findRealmFolderById(realm.getId(), folderType) == null) {
-            woWBusiness.createRealmFolder(new RealmFolder(realm.getId(), folderType, folder.getPath()));
+
+            if (!connectedRealm.getFolders().containsKey(folderType)) {
+                connectedRealm.getFolders().put(folderType, new Folder(connectedRealm, folderType, folder.getPath()));
+            }
         }
+        connectedRealm.flush();
     }
 }

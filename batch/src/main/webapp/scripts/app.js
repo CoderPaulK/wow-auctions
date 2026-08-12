@@ -48,21 +48,18 @@ app.controller('itemsController', function ($scope, $filter, itemsService) {
             { field: 'avgBid', displayName: 'Avg Bid', cellFilter: 'gold' },
             { field: 'minBuyout', displayName: 'Min Buyout', cellFilter: 'gold' },
             { field: 'maxBuyout', displayName: 'Max Buyout', cellFilter: 'gold' },
-            { field: 'avgBuyout', displayName: 'Avg Buyout', cellFilter: 'gold' },
-            { field: 'auctionHouse', displayName: 'AH' }
+            { field: 'avgBuyout', displayName: 'Avg Buyout', cellFilter: 'gold' }
         ]
     };
 
     function drawChart() {
         var rows = [];
-        for (var i = 0; i < $scope.itemData.length; i = i + 2) {
+        for (var i = 0; i < $scope.itemData.length; i++) {
             rows.push({
                 c: [
                     {v: new Date($scope.itemData[i].timestamp)},
                     {v: $scope.itemData[i].avgBid / 10000},
-                    {v: $scope.itemData[i+1].avgBid / 10000},
-                    {v: $scope.itemData[i].avgBuyout / 10000},
-                    {v: $scope.itemData[i+1].avgBuyout / 10000}
+                    {v: $scope.itemData[i].avgBuyout / 10000}
                 ]});
         }
 
@@ -71,16 +68,14 @@ app.controller('itemsController', function ($scope, $filter, itemsService) {
         $scope.chart.data = {
             "cols": [
                 {label: "Timestamp", type: "datetime"},
-                {label: "Allience Bid", type: "number"},
-                {label: "Horde Bid", type: "number"},
-                {label: "Allience Buyout", type: "number"},
-                {label: "Horde Buyout", type: "number"}
+                {label: "Bid", type: "number"},
+                {label: "Buyout", type: "number"}
             ],
             "rows": rows};
 
         $scope.chart.options = {
             displayExactValues: true,
-            pointSize: 2,
+            pointSize: 3,
             vAxis: {
                 title: "",
                 gridlines: {count: 5}
@@ -90,9 +85,7 @@ app.controller('itemsController', function ($scope, $filter, itemsService) {
             },
             series: {
                 0: { color: 'dodgerblue' },
-                1: { color: 'indianred' },
-                2: { color: 'blue' },
-                3: { color: 'red' }
+                1: { color: 'indianred' }
             }
         };
 

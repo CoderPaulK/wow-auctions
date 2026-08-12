@@ -2,46 +2,46 @@ package com.radcortez.wow.auctions.batch.process.move;
 
 import com.radcortez.wow.auctions.batch.process.AbstractAuctionFileProcess;
 import com.radcortez.wow.auctions.entity.FolderType;
+import lombok.extern.java.Log;
 import org.apache.commons.io.FileExistsException;
+import org.eclipse.microprofile.config.Config;
 
-import javax.batch.api.BatchProperty;
-import javax.batch.api.Batchlet;
-import javax.inject.Inject;
-import javax.inject.Named;
+import jakarta.batch.api.Batchlet;
+import jakarta.batch.runtime.BatchStatus;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import java.io.File;
-import java.util.logging.Level;
 
-import static java.util.logging.Logger.getLogger;
 import static org.apache.commons.io.FileUtils.moveFileToDirectory;
 
 /**
  * @author Roberto Cortez
  */
+@Dependent
 @Named
+@Log
 public class MoveFileBatchlet extends AbstractAuctionFileProcess implements Batchlet {
     @Inject
-    @BatchProperty(name = "from")
-    private String from;
-    @Inject
-    @BatchProperty(name = "to")
-    private String to;
+    Config config;
 
     @Override
     public String process() throws Exception {
-        File file = getContext().getFileToProcess(FolderType.valueOf(from));
-        File destinationFolder = getContext().getFolder(FolderType.valueOf(to));
+        File file = getContext().getAuctionFile(
+            FolderType.valueOf(config.getConfigValue("wow.batch.download.from").getValue()));
+        File destinationFolder =
+            getContext().getFolder(FolderType.valueOf(config.getConfigValue("wow.batch.download.to").getValue()));
 
         try {
-            getLogger(this.getClass().getName()).log(Level.INFO, "Moving file " + file + " to " + destinationFolder);
+            log.info("Moving file " + file + " to " + destinationFolder);
             moveFileToDirectory(file, destinationFolder, false);
         } catch (FileExistsException e) {
-            getLogger(this.getClass().getName()).log(Level.WARNING,
-                                                     "File " + file + " already exists at " + destinationFolder);
+            log.warning("File " + file + " already exists at " + destinationFolder);
         }
 
-        return "COMPLETED";
+        return BatchStatus.COMPLETED.toString();
     }
 
     @Override
-    public void stop() throws Exception {}
+    public void stop() {}
 }

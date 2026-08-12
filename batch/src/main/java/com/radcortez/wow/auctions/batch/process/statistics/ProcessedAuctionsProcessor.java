@@ -1,49 +1,42 @@
 package com.radcortez.wow.auctions.batch.process.statistics;
 
 import com.radcortez.wow.auctions.batch.process.AbstractAuctionFileProcess;
-import com.radcortez.wow.auctions.entity.AuctionHouse;
-import com.radcortez.wow.auctions.entity.AuctionItemStatistics;
+import com.radcortez.wow.auctions.entity.AuctionStatistics;
 
-import javax.batch.api.BatchProperty;
-import javax.batch.api.chunk.ItemProcessor;
-import javax.inject.Inject;
-import javax.inject.Named;
+import jakarta.batch.api.chunk.ItemProcessor;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Named;
 import java.sql.ResultSet;
 
 /**
  * @author Ivan St. Ivanov
  */
+@Dependent
 @Named
 public class ProcessedAuctionsProcessor extends AbstractAuctionFileProcess implements ItemProcessor {
-    @Inject
-    @BatchProperty(name = "auctionHouse")
-    String auctionHouse;
-
     @Override
-    @SuppressWarnings("unchecked")
     public Object processItem(Object item) throws Exception {
         ResultSet resultSet = (ResultSet) item;
 
-        AuctionItemStatistics auctionItemStatistics = new AuctionItemStatistics();
-        auctionItemStatistics.setItemId(resultSet.getInt(1));
-        auctionItemStatistics.setQuantity(resultSet.getLong(2));
-        auctionItemStatistics.setBid(resultSet.getLong(3));
-        auctionItemStatistics.setBuyout(resultSet.getLong(4));
-        auctionItemStatistics.setMinBid(resultSet.getLong(5));
-        auctionItemStatistics.setMinBuyout(resultSet.getLong(6));
-        auctionItemStatistics.setMaxBid(resultSet.getLong(7));
-        auctionItemStatistics.setMaxBuyout(resultSet.getLong(8));
+        AuctionStatistics auctionStatistics = new AuctionStatistics();
+        auctionStatistics.setItemId(resultSet.getInt(1));
+        auctionStatistics.setQuantity(resultSet.getLong(2));
+        auctionStatistics.setBid(resultSet.getLong(3));
+        auctionStatistics.setBuyout(resultSet.getLong(4));
+        auctionStatistics.setMinBid(resultSet.getLong(5));
+        auctionStatistics.setMinBuyout(resultSet.getLong(6));
+        auctionStatistics.setMaxBid(resultSet.getLong(7));
+        auctionStatistics.setMaxBuyout(resultSet.getLong(8));
 
-        auctionItemStatistics.setTimestamp(getContext().getFileToProcess().getLastModified());
+        auctionStatistics.setTimestamp(getContext().getAuctionFile().getTimestamp());
 
-        auctionItemStatistics.setAvgBid(
-                (double) (auctionItemStatistics.getBid() / auctionItemStatistics.getQuantity()));
-        auctionItemStatistics.setAvgBuyout(
-                (double) (auctionItemStatistics.getBuyout() / auctionItemStatistics.getQuantity()));
+        auctionStatistics.setAvgBid(
+                (double) (auctionStatistics.getBid() / auctionStatistics.getQuantity()));
+        auctionStatistics.setAvgBuyout(
+                (double) (auctionStatistics.getBuyout() / auctionStatistics.getQuantity()));
 
-        auctionItemStatistics.setAuctionHouse(AuctionHouse.valueOf(auctionHouse));
-        auctionItemStatistics.setRealm(getContext().getRealm());
+        auctionStatistics.setConnectedRealm(getContext().getConnectedRealm());
 
-        return auctionItemStatistics;
+        return auctionStatistics;
     }
 }

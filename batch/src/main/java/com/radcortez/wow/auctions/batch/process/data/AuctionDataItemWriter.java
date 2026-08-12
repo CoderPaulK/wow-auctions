@@ -1,21 +1,20 @@
 package com.radcortez.wow.auctions.batch.process.data;
 
-import javax.batch.api.chunk.AbstractItemWriter;
-import javax.inject.Named;
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
+import com.radcortez.wow.auctions.entity.Auction;
+
+import jakarta.batch.api.chunk.AbstractItemWriter;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Named;
 import java.util.List;
 
 /**
  * @author Roberto Cortez
  */
+@Dependent
 @Named
 public class AuctionDataItemWriter extends AbstractItemWriter {
-    @PersistenceContext
-    protected EntityManager em;
-
     @Override
-    public void writeItems(List<Object> items) throws Exception {
-        items.forEach(em::persist);
+    public void writeItems(List<Object> items) {
+        items.stream().map(Auction.class::cast).forEach(Auction::create);
     }
 }

@@ -1,33 +1,25 @@
 package com.radcortez.wow.auctions.batch.util;
 
-import org.apache.commons.dbcp.BasicDataSource;
 
-import javax.annotation.Resource;
-import javax.batch.api.BatchProperty;
-import javax.batch.runtime.BatchStatus;
-import javax.batch.runtime.context.JobContext;
-import javax.enterprise.inject.Alternative;
-import javax.enterprise.inject.Disposes;
-import javax.enterprise.inject.Produces;
-import javax.enterprise.inject.spi.InjectionPoint;
-import javax.inject.Named;
-import javax.inject.Singleton;
-import javax.persistence.EntityManager;
-import javax.persistence.Persistence;
-import javax.persistence.PersistenceContext;
-import javax.sql.DataSource;
-import java.util.HashMap;
-import java.util.Map;
+import jakarta.annotation.Priority;
+import jakarta.batch.api.BatchProperty;
+import jakarta.batch.runtime.BatchStatus;
+import jakarta.batch.runtime.context.JobContext;
+import jakarta.enterprise.inject.Alternative;
+import jakarta.enterprise.inject.Produces;
+import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.inject.Singleton;
+
 import java.util.Properties;
 
 /**
  * @author Roberto Cortez
  */
-@Named
-@Alternative
 public class BatchUnitTestProducer {
     @Produces
     @Singleton
+    @Alternative
+    @Priority(Integer.MAX_VALUE)
     public JobContext getJobContext() {
         return new JobContext() {
             private Object transientData;
@@ -60,7 +52,7 @@ public class BatchUnitTestProducer {
             @Override
             public Properties getProperties() {
                 Properties properties = new Properties();
-                properties.setProperty("realmId", "1");
+                properties.setProperty("connectedRealmId", "1");
                 properties.setProperty("auctionFileId", "1");
                 return properties;
             }
@@ -84,6 +76,8 @@ public class BatchUnitTestProducer {
 
     @Produces
     @BatchProperty
+    @Alternative
+    @Priority(Integer.MAX_VALUE)
     public String getString(InjectionPoint injectionPoint) {
         BatchProperty annotation = injectionPoint.getAnnotated().getAnnotation(BatchProperty.class);
 
@@ -92,31 +86,5 @@ public class BatchUnitTestProducer {
         }
 
         return "test";
-    }
-
-    @Produces
-    @PersistenceContext
-    @Singleton
-    public EntityManager create() {
-        Map<String, String> properties = new HashMap<>();
-        properties.put("javax.persistence.transactionType", "RESOURCE_LOCAL");
-        properties.put("hibernate.show_sql", "true");
-        return Persistence.createEntityManagerFactory("wowAuctions", properties).createEntityManager();
-    }
-
-    public void close(@Disposes EntityManager em) {
-        if (em.isOpen()) {
-            em.close();
-        }
-    }
-
-    @Produces
-    @Resource
-    @Singleton
-    public DataSource getDatasource() {
-        BasicDataSource dataSource = new BasicDataSource();
-        dataSource.setUrl("jdbc:h2:target/data/repository");
-        dataSource.setDriverClassName("org.h2.Driver");
-        return dataSource;
     }
 }

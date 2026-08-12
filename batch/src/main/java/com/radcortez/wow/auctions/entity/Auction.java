@@ -1,35 +1,44 @@
 package com.radcortez.wow.auctions.entity;
 
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
-import javax.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * @author Roberto Cortez
  */
+@NoArgsConstructor
 @Data
+@EqualsAndHashCode(of = "id", callSuper = false)
+@ToString(exclude = "auctionFile")
+
 @Entity
-@NamedQueries({
-    @NamedQuery(name = "Auction.findByRealm",
-              query = "SELECT a FROM Auction a WHERE a.realm.id = :realmId"),
-    @NamedQuery(name = "Auction.deleteByAuctionFile",
-              query = "DELETE FROM Auction a WHERE a.auctionFile.id = :fileId")
-})
-public class Auction implements Serializable {
+public class Auction extends PanacheEntityBase implements Serializable {
     @Id
-    private Long auctionId;
+    private Long id;
     @Id
-    @ManyToOne
+    @ManyToOne(optional = false)
     private AuctionFile auctionFile;
 
-    private AuctionHouse auctionHouse;
     private Integer itemId;
-    private String ownerRealm;
-    private Integer bid;
-    private Integer buyout;
+    private Long bid;
+    private Long buyout;
     private Integer quantity;
 
-    @ManyToOne
-    private Realm realm;
+    public Auction create() {
+        persist();
+        return this;
+    }
+
+    public static List<Auction> findByConnectedRealm(final ConnectedRealm connectedRealm) {
+        return list("auctionFile.connectedRealm.id", connectedRealm.getId());
+    }
 }

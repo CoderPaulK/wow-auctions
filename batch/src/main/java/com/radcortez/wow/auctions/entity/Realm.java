@@ -1,68 +1,35 @@
 package com.radcortez.wow.auctions.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
-import javax.persistence.*;
-import java.io.Serializable;
-import java.util.List;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 
 /**
  * @author Roberto Cortez
  */
+@NoArgsConstructor
+@AllArgsConstructor
 @Data
+@EqualsAndHashCode(of = "id", callSuper = false)
+@ToString(exclude = "connectedRealm")
+@Builder
+
 @Entity
-@JsonIgnoreProperties(ignoreUnknown = true)
-@NamedQueries({
-      @NamedQuery(name = "Realm.listRealms",
-                  query = "SELECT r FROM Realm r ORDER BY r.name, r.region"),
-      @NamedQuery(name = "Realm.findRealmsWithConnectionsById",
-                  query = "SELECT r FROM Realm r LEFT JOIN FETCH r.connectedRealms " +
-                          "WHERE r.id = :id ORDER BY r.name, r.region"),
-      @NamedQuery(name = "Realm.findByNameOrSlugInRegion",
-                  query = "SELECT r FROM Realm r " +
-                          "WHERE (r.name = :name OR r.nameAuction = :name OR r.slug = :slug) AND r.region = :region"),
-      @NamedQuery(name = "Realm.findByRegion",
-                  query = "SELECT r FROM Realm r " +
-                          "WHERE r.region = :region"),
-      @NamedQuery(name = "Realm.exists",
-                  query = "SELECT COUNT(r) FROM Realm r " +
-                          "WHERE r.name = :name AND r.region = :region"),
-})
-public class Realm implements Serializable {
+public class Realm extends PanacheEntityBase {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "realmId")
-    @SequenceGenerator(name = "realmId", sequenceName = "REALM_ID_SEQ", initialValue = 1, allocationSize = 1)
-    private Long id;
+    private String id;
     private String name;
-    private String nameAuction;
     private String slug;
-    private Region region;
-    private boolean status;
 
-    @Transient
-    private String[] connected_realms;
-
-    @ManyToMany
-    @JsonIgnore
-    private List<Realm> connectedRealms;
-
-    public void setName(String name) {
-        this.name = name;
-        this.nameAuction = name.replaceAll(" ", "");
-    }
-
-    public void setRegion(String region) {
-        this.region = Region.valueOf(region);
-    }
-
-    public String getRealmDetail() {
-        return region + " " + name;
-    }
-
-    public static enum Region {
-        US,
-        EU
-    }
+    @ManyToOne(cascade = CascadeType.ALL, optional = false)
+    private ConnectedRealm connectedRealm;
 }

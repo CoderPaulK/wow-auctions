@@ -1,64 +1,58 @@
 package com.radcortez.wow.auctions.batch.prepare;
 
-import com.radcortez.wow.auctions.business.WoWBusiness;
-import com.radcortez.wow.auctions.entity.Realm;
+import com.radcortez.wow.auctions.api.ApiConfig;
+import com.radcortez.wow.auctions.api.ConnectedRealmsApi;
+import com.radcortez.wow.auctions.api.LocationApi;
+import com.radcortez.wow.auctions.entity.ConnectedRealm;
+import lombok.extern.java.Log;
+import org.eclipse.microprofile.config.Config;
 
-import javax.batch.api.AbstractBatchlet;
-import javax.batch.api.BatchProperty;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.core.MediaType;
-import java.util.ArrayList;
-import java.util.Optional;
-import java.util.logging.Level;
-
-import static java.util.logging.Logger.getLogger;
+import jakarta.batch.api.AbstractBatchlet;
+import jakarta.batch.runtime.BatchStatus;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.transaction.Transactional;
+import java.net.URI;
 
 /**
  * @author Roberto Cortez
  */
+@Dependent
 @Named
+@Log
 public class ConnectRealmsBatchlet extends AbstractBatchlet {
     @Inject
-    private WoWBusiness woWBusiness;
-
+    ApiConfig apiConfig;
     @Inject
-    @BatchProperty(name = "region")
-    private String region;
+    ConnectedRealmsApi connectedRealmsApi;
     @Inject
-    @BatchProperty(name = "target")
-    private String target;
+    LocationApi locationApi;
 
     @Override
-    public String process() throws Exception {
-        getLogger(this.getClass().getName()).log(Level.INFO, this.getClass().getSimpleName() + " running");
+    @Transactional
+    public String process() {
+        log.info(ConnectRealmsBatchlet.class.getSimpleName() + " running");
 
-        Client client = ClientBuilder.newClient();
-        Realms realms = client.target(target)
-                              .request(MediaType.TEXT_PLAIN)
-                              .get(Realms.class);
+        connectedRealmsApi.index()
+                          .getConnectedRealms()
+                          .forEach(location -> createConnectedRealmFromUri(location.getHref()));
 
-        realms.getRealms().forEach(this::createConnectedRealms);
-
-        getLogger(this.getClass().getName()).log(Level.INFO, this.getClass().getSimpleName() + " completed");
-        return "COMPLETED";
+        log.info(ConnectRealmsBatchlet.class.getSimpleName() + " completed");
+        return BatchStatus.COMPLETED.toString();
     }
 
-    void createConnectedRealms(Realm realm) {
-        Realm originalRealm =
-                woWBusiness.findRealmByNameOrSlug(realm.getNameAuction(), Realm.Region.valueOf(region)).get();
-        originalRealm.setConnectedRealms(new ArrayList<>());
+    private void createConnectedRealmFromUri(final URI connectedRealmUri) {
+        com.radcortez.wow.auctions.api.ConnectedRealm connectedRealm =
+            locationApi.getConnectedRealm(connectedRealmUri.getPath());
 
-        for (String slug : realm.getConnected_realms()) {
-            Optional<Realm> connectedRealm = woWBusiness.findRealmByNameOrSlug(slug, originalRealm.getRegion());
-
-            if (connectedRealm.isPresent()) {
-                originalRealm.getConnectedRealms().add(connectedRealm.get());
-            }
+        log.info("Connected Realm " + connectedRealm);
+        if (connectedRealm.isDown()) {
+            return;
         }
 
-        woWBusiness.updateRealm(originalRealm);
+        ConnectedRealm connectedRealmEntity = connectedRealm.toEntity(apiConfig.region());
+        ConnectedRealm.<ConnectedRealm>findByIdOptional(connectedRealm.getId())
+            .ifPresentOrElse(connectedRealmEntity::update, connectedRealmEntity::create);
     }
 }

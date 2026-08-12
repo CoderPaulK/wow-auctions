@@ -1,77 +1,84 @@
 package com.radcortez.wow.auctions.batch.process.download;
 
+import com.radcortez.wow.auctions.api.ApiConfig;
+import com.radcortez.wow.auctions.api.ConnectedRealmsApi;
 import com.radcortez.wow.auctions.batch.process.AbstractAuctionFileProcess;
-import com.radcortez.wow.auctions.business.WoWBusiness;
 import com.radcortez.wow.auctions.entity.AuctionFile;
+import com.radcortez.wow.auctions.entity.ConnectedRealm;
 import com.radcortez.wow.auctions.entity.FileStatus;
+import com.radcortez.wow.auctions.entity.Folder;
 import com.radcortez.wow.auctions.entity.FolderType;
-import com.radcortez.wow.auctions.entity.RealmFolder;
+import lombok.extern.java.Log;
 import org.apache.commons.io.FileUtils;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import javax.batch.api.BatchProperty;
-import javax.batch.api.Batchlet;
-import javax.inject.Inject;
-import javax.inject.Named;
+import jakarta.batch.api.Batchlet;
+import jakarta.batch.runtime.BatchStatus;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.transaction.Transactional;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.URL;
-import java.util.logging.Level;
+import java.io.InputStream;
 
-import static java.util.logging.Logger.getLogger;
 import static org.apache.commons.io.FileUtils.getFile;
 
 /**
  * @author Roberto Cortez
  */
+@Dependent
 @Named
+@Log
 public class DownloadAuctionFileBatchlet extends AbstractAuctionFileProcess implements Batchlet {
     @Inject
-    private WoWBusiness woWBusiness;
-
+    Config config;
     @Inject
-    @BatchProperty(name = "to")
-    private String to;
+    ConnectedRealmsApi connectedRealmsApi;
 
     @Override
-    public String process() throws Exception {
-        getLogger(this.getClass().getName()).log(Level.INFO, this.getClass().getSimpleName() + " running");
+    @Transactional
+    public String process() {
+        log.info(this.getClass().getSimpleName() + " running");
 
-        downloadAuctionFile(getContext().getFileToProcess());
+        downloadAuctionFile();
 
-        getLogger(this.getClass().getName()).log(Level.INFO, this.getClass().getSimpleName() + " completed");
-        return "COMPLETED";
+        log.info(this.getClass().getSimpleName() + " completed");
+
+        return BatchStatus.COMPLETED.toString();
     }
 
     @Override
-    public void stop() throws Exception {}
+    public void stop() {}
 
-    private void downloadAuctionFile(AuctionFile auctionFile) {
-        RealmFolder folder = woWBusiness.findRealmFolderById(auctionFile.getRealm().getId(), FolderType.valueOf(to));
+    private void downloadAuctionFile() {
+        final ConnectedRealm connectedRealm = getContext().getConnectedRealm();
+        final Folder folder = connectedRealm.getFolders()
+                                            .get(FolderType.valueOf(
+                                                config.getConfigValue("wow.batch.download.to").getValue()));
 
-        getLogger(this.getClass().getName()).log(Level.INFO,
-                                                 "Downloadig Auction file " +
-                                                 auctionFile.getUrl() +
-                                                 " to " +
-                                                 folder.getPath()
-                                                );
-        try {
-            File finalFile = getFile(folder.getPath() + "/" + auctionFile.getFileName());
-            if (!finalFile.exists()) {
-                FileUtils.copyURLToFile(new URL(auctionFile.getUrl()), finalFile);
+        log.info("Downloading Auction data for connected realm " + connectedRealm.getId());
+        // TODO - register file download and check if already process before downloading a new one
+        final long timestamp = System.currentTimeMillis();
+        final String fileName = "payload-" + timestamp + ".json";
+        final File finalFile = getFile(folder.getPath() + "/" + fileName);
+        if (!finalFile.exists()) {
+            try (InputStream payload = connectedRealmsApi.auctions(connectedRealm.getId())) {
+                FileUtils.copyInputStreamToFile(payload, finalFile);
+                log.info("Copied Auction data to " + finalFile);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
             }
 
-            auctionFile.setFileStatus(FileStatus.DOWNLOADED);
-            woWBusiness.updateAuctionFile(auctionFile);
-        } catch (FileNotFoundException e) {
-            getLogger(this.getClass().getName()).log(Level.INFO,
-                                                     "Could not download Auction file " +
-                                                     auctionFile.getUrl() +
-                                                     " from " +
-                                                     auctionFile.getRealm().getName()
-                                                    );
-        } catch (IOException e) {
-            e.printStackTrace();
+            final AuctionFile auctionFile =
+                AuctionFile.builder()
+                           .fileName(fileName)
+                           .fileStatus(FileStatus.DOWNLOADED)
+                           .connectedRealm(connectedRealm)
+                           .timestamp(timestamp)
+                           .build();
+
+            getContext().setAuctionFile(auctionFile.create());
         }
     }
 }

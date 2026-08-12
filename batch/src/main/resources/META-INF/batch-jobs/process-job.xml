@@ -1,13 +1,14 @@
 <job id="processJob" xmlns="http://xmlns.jcp.org/xml/ns/javaee" version="1.0">
     <properties>
-        <property name="realmId" value="#{jobParameters['realmId']}"/>
-        <property name="auctionFileId" value="#{jobParameters['auctionFileId']}"/>
+        <property name="api.blizzard.region" value="#{jobParameters['api.blizzard.region']}"/>
+        <property name="connectedRealmId" value="#{jobParameters['connectedRealmId']}"/>
     </properties>
 
     <step id="downloadAuctionFilesStep" next="moveFileToTempInput">
         <batchlet ref="downloadAuctionFileBatchlet">
             <properties>
-                <property name="to" value="FI"/>
+                <property name="api.blizzard.region" value="#{jobParameters['api.blizzard.region']}"/>
+                <property name="wow.batch.download.to" value="FI"/>
             </properties>
         </batchlet>
     </step>
@@ -15,8 +16,8 @@
     <step id="moveFileToTempInput" next="processFile">
         <batchlet ref="moveFileBatchlet">
             <properties>
-                <property name="from" value="FI"/>
-                <property name="to" value="FI_TMP"/>
+                <property name="wow.batch.download.from" value="FI"/>
+                <property name="wow.batch.download.to" value="FI_TMP"/>
             </properties>
         </batchlet>
     </step>
@@ -32,36 +33,18 @@
     <step id="moveFileToProcessed" next="importStatistics">
         <batchlet ref="moveFileBatchlet">
             <properties>
-                <property name="from" value="FI_TMP"/>
-                <property name="to" value="FP"/>
+                <property name="wow.batch.download.from" value="FI_TMP"/>
+                <property name="wow.batch.download.to" value="FP"/>
             </properties>
         </batchlet>
     </step>
 
     <step id="importStatistics">
         <chunk item-count="100">
-            <reader ref="processedAuctionsReader">
-                <properties>
-                    <property name="auctionHouse" value="#{partitionPlan['auctionHouse']}"/>
-                </properties>
-            </reader>
-            <processor ref="processedAuctionsProcessor">
-                <properties>
-                    <property name="auctionHouse" value="#{partitionPlan['auctionHouse']}"/>
-                </properties>
-            </processor>
+            <reader ref="processedAuctionsReader"/>
+            <processor ref="processedAuctionsProcessor"/>
             <writer ref="processedAuctionsWriter"/>
         </chunk>
-        <partition>
-            <plan partitions="2">
-                <properties partition="0">
-                    <property name="auctionHouse" value="ALLIANCE"/>
-                </properties>
-                <properties partition="1">
-                    <property name="auctionHouse" value="HORDE"/>
-                </properties>
-            </plan>
-        </partition>
     </step>
 
     <!--
